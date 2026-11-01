@@ -9,18 +9,50 @@
     --card-inner: #0F1620;
     --border-hairline: rgba(255, 255, 255, 0.07);
     --border-hover: rgba(16, 185, 129, 0.3);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+  }
+
+  .theme-light {
+    --bg-primary: #f8fafc;
+    --card-surface: rgba(255, 255, 255, 0.95);
+    --card-inner: #f1f5f9;
+    --border-hairline: rgba(15, 23, 42, 0.08);
+    --border-hover: rgba(16, 185, 129, 0.4);
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
   }
 
   body {
-    background-color: #06090E;
-    color: #f8fafc;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   /* Strict Tabular Numbers for Precision Alignment */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* Accessible Skip-to-Content Link */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.5rem 1rem;
+  background-color: #10b981;
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+  transition: top 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.skip-link:focus {
+  top: 1rem;
+  outline: 2px solid #ffffff;
 }
 
 /* Precision Micro Scrollbars */
@@ -37,6 +69,13 @@
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(16, 185, 129, 0.35);
+}
+
+.theme-light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+.theme-light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.5);
 }
 
 /* 10-Bar Micro Audio Equalizer Waveform Animations */
@@ -61,6 +100,16 @@
 
 .animate-call-shield {
   animation: callRingPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Form Error Validation Shake Animation */
+@keyframes shakeHorizontal {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shakeHorizontal 0.35s ease-in-out;
 }
 
 /* Shimmer scanline effect for Primary CTA */
@@ -88,4 +137,62 @@
   );
   transform: skewX(-20deg);
   animation: shimmerPass 3.5s infinite;
+}
+
+/* Pulse Skeleton shimmer */
+@keyframes pulseSkeleton {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.75; }
+}
+.animate-skeleton {
+  animation: pulseSkeleton 1.5s ease-in-out infinite;
+}
+
+/* ========================================================================= */
+/* PRINT STYLESHEET (@media print)                                           */
+/* ========================================================================= */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide screen-only interactive elements */
+  .no-print,
+  .skip-link,
+  .cookie-banner,
+  .back-to-top,
+  .floating-contact,
+  .floating-call-shield,
+  .header-actions,
+  .audio-scrubber-section,
+  .interactive-buttons,
+  .modal-backdrop,
+  header {
+    display: none !important;
+  }
+
+  /* Show dedicated print summary header */
+  .print-only {
+    display: block !important;
+    color: #000000 !important;
+  }
+
+  /* Ensure ledger and financial tables print cleanly */
+  .print-table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    color: #000000 !important;
+  }
+  .print-table th,
+  .print-table td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 8px 12px !important;
+    color: #000000 !important;
+    background: transparent !important;
+  }
+}
+
+.print-only {
+  display: none;
 }
