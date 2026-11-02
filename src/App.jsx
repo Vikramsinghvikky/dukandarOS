@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   motion, 
   AnimatePresence 
@@ -48,6 +48,7 @@ import {
   Languages,
   StopCircle,
   FileAudio,
+  Upload,
   ArrowUpRight,
   Sun,
   Moon,
@@ -531,14 +532,60 @@ export default function App() {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   });
 
-  const handleManualSync = () => {
+  const handleManualSync = async () => {
     setIsRefreshing(true);
     playAudioChime('ping');
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${API_BASE}/api/state`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const data = await res.json();
+        setBackendConnected(true);
+        setSyncStatusText('FastAPI + SQLite Connected');
+        if (data.customers) setCustomers(data.customers);
+        if (data.settledCash) setSettledCash(data.settledCash);
+        if (data.settledUpi) setSettledUpi(data.settledUpi);
+        if (data.streamLogs) setStreamLogs(data.streamLogs);
+        if (data.inventoryAlerts) setInventoryAlerts(data.inventoryAlerts);
+        showToast('Khata Synced with SQLite', 'Balances verified against dukandar_khata.db', 'success');
+      } else {
+        showToast('Khata Synced (Local)', 'Acoustic buffers and balances up to date.', 'success');
+      }
+    } catch {
+      showToast('Khata Synced (Local)', 'Acoustic buffers and balances up to date.', 'success');
+    } finally {
       setIsRefreshing(false);
       setLastUpdatedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      showToast('Khata Synced', 'Acoustic buffers and balances up to date.', 'success');
-    }, 700);
+    }
+  };
+
+  // 1-Click Reset Demo DB to initial defaults
+  const handleResetDemoDb = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/reset-demo`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.customers) setCustomers(data.customers);
+        if (data.settledCash) setSettledCash(data.settledCash);
+        if (data.settledUpi) setSettledUpi(data.settledUpi);
+        if (data.streamLogs) setStreamLogs(data.streamLogs);
+        if (data.inventoryAlerts) setInventoryAlerts(data.inventoryAlerts);
+        fireConfetti();
+        playAudioChime('lock');
+        showToast('Demo DB Reset!', 'dukandar_khata.db re-seeded with 5 default customers (₹1,510 Due).', 'success');
+      } else {
+        setCustomers(INITIAL_CUSTOMERS);
+        setSettledCash(2450);
+        setSettledUpi(4120);
+        fireConfetti();
+        showToast('Demo Reset (Local)', 'Restored default synthetic records.', 'success');
+      }
+    } catch {
+      setCustomers(INITIAL_CUSTOMERS);
+      setSettledCash(2450);
+      setSettledUpi(4120);
+      fireConfetti();
+      showToast('Demo Reset (Local)', 'Restored default synthetic records.', 'success');
+    }
   };
 
   // 19. Expandable FAQ State
@@ -568,6 +615,7 @@ export default function App() {
   const [scrubberPosition, setScrubberPosition] = useState(72);
   const [activeTimelinePin, setActiveTimelinePin] = useState('tl_5');
   const [noiseSliderDb, setNoiseSliderDb] = useState(74);
+  const audioFileInputRef = useRef(null);
 
   // Feature 5: Multi-Language Dialect Switcher
   const [selectedDialect, setSelectedDialect] = useState('hi-IN');
@@ -692,6 +740,8 @@ export default function App() {
             if (data.customers) setCustomers(data.customers);
             if (data.settledCash) setSettledCash(data.settledCash);
             if (data.settledUpi) setSettledUpi(data.settledUpi);
+            if (data.streamLogs) setStreamLogs(data.streamLogs);
+            if (data.inventoryAlerts) setInventoryAlerts(data.inventoryAlerts);
           }
         }
       } catch (err) {
@@ -888,15 +938,24 @@ export default function App() {
       setFormSuccessMessage(null);
     }, 1500);
 
-    fetch(`${API_BASE}/api/settle-balance`, {
+    fetch(`${API_BASE}/api/settle-customer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        customer_name: settlementTargetCust.name,
         customerId: settlementTargetCust.id,
-        amount: amountToSettle,
-        method: 'UPI_QR'
+        amount_paid: amountToSettle,
+        payment_mode: 'UPI'
       })
-    }).catch(() => {});
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.customers) setCustomers(data.customers);
+      if (data.settledCash) setSettledCash(data.settledCash);
+      if (data.settledUpi) setSettledUpi(data.settledUpi);
+      if (data.streamLogs) setStreamLogs(data.streamLogs);
+    })
+    .catch(() => {});
   };
 
   // Add Item to Customer from Call Shield or Counter
@@ -972,16 +1031,25 @@ export default function App() {
     setCustomItemText('');
     setCustomItemAmount('');
 
-    fetch(`${API_BASE}/api/add-interrupt-note`, {
+    fetch(`${API_BASE}/api/add-customer-or-credit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        customerId: targetCust.id,
-        item: itemName,
-        amount: amount,
-        timestamp: timeStamp
+        customer_name: targetCust.name,
+        phone_synthetic: targetCust.phone,
+        added_amount: amount,
+        items: itemName,
+        tx_type: 'Udhari',
+        proof_quote: `${targetCust.name}: '${bufferSnapshot}'`,
+        time_str: timeStamp
       })
-    }).catch(() => {});
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.customers) setCustomers(data.customers);
+      if (data.streamLogs) setStreamLogs(data.streamLogs);
+    })
+    .catch(() => {});
   };
 
   // Start Batch AI Pipeline Simulation
@@ -1037,7 +1105,114 @@ export default function App() {
         '11.5 hrs street audio diarized and balances locked with timestamp proofs.',
         'success'
       );
+
+      fetch(`${API_BASE}/api/stop-and-analyze-day`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.customers) setCustomers(data.customers);
+          if (data.synced_at) setLastUpdatedTime(data.synced_at);
+        })
+        .catch(() => {});
     }, 5200);
+  };
+
+  // Upload Real Audio File & Process via Gnani AI API Pipeline
+  const handleAudioFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedAudioSource(file.name);
+    setIsBatchPipelineActive(true);
+    setPipelineStage(1);
+    setPipelineProgress(18);
+    setPipelineLogs([
+      "Uploading audio recording to Gnani AI Sovereign Pipeline...",
+      `Audio File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`,
+      `Prisma v2.5: Ambient noise normalized (${noiseSliderDb} dB street filter active)...`,
+      "Prisma v2.5: Multi-speaker Diarization initialized..."
+    ]);
+    playAudioChime('ping');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      setTimeout(() => {
+        setPipelineProgress(52);
+        setPipelineLogs(prev => [
+          ...prev,
+          "Gnani Prisma v2.5 ASR: Acoustic speech-to-text frames extracted.",
+          "Evon v3.3: Parsing commercial intent, customer entities & dispute claims..."
+        ]);
+        setPipelineStage(2);
+        playAudioChime('ping');
+      }, 1500);
+
+      const res = await fetch(`${API_BASE}/api/upload-and-analyze`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+
+        setTimeout(() => {
+          setPipelineProgress(85);
+          setPipelineLogs(prev => [
+            ...prev,
+            `Prisma Transcript: "${data.transcript ? data.transcript.slice(0, 70) + '...' : 'Complete'}"`,
+            `Evon v3.3: Extracted ${data.applied_count || 1} commercial transaction(s).`,
+            "Gnani Timbre v3.0: Phonetic normalizer locked audio proof to Dispute Vault."
+          ]);
+          setPipelineStage(3);
+          playAudioChime('ping');
+        }, 2800);
+
+        setTimeout(() => {
+          setPipelineProgress(100);
+          setPipelineLogs(prev => [
+            ...prev,
+            `SQLite DukandarKhata.db updated: Old Balance + Today's New Balance locked.`,
+            `Acoustic settlement synchronized successfully!`
+          ]);
+          setPipelineStage(4);
+          playAudioChime('lock');
+          fireConfetti();
+
+          if (data.customers) setCustomers(data.customers);
+          if (data.settledCash !== undefined) setSettledCash(data.settledCash);
+          if (data.settledUpi !== undefined) setSettledUpi(data.settledUpi);
+          if (data.streamLogs) setStreamLogs(data.streamLogs);
+          if (data.inventoryAlerts) setInventoryAlerts(data.inventoryAlerts);
+          if (data.synced_at) setLastUpdatedTime(data.synced_at);
+
+          showToast(
+            'Audio Upload & Analysis Complete!',
+            `Extracted ${data.applied_count || 1} commercial transaction(s) directly into Khata.`,
+            'success'
+          );
+        }, 4200);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (err) {
+      setTimeout(() => {
+        setPipelineProgress(100);
+        setPipelineLogs(prev => [
+          ...prev,
+          "Local acoustic fallback: Processed voice audio stream in on-device mode.",
+          "Balances synchronized successfully."
+        ]);
+        setPipelineStage(4);
+        playAudioChime('lock');
+        fireConfetti();
+        showToast(
+          'Local Audio Analysis Complete',
+          `Parsed ${file.name} using local acoustic simulator.`,
+          'info'
+        );
+      }, 3500);
+    }
   };
 
   const closeBatchPipeline = () => {
@@ -1113,6 +1288,26 @@ export default function App() {
       setFormSuccessMessage(null);
       showToast('Customer Added', `${newCustomerObj.name} added with Total Due ${formatRupee(total)}`, 'success');
     }, 1000);
+
+    fetch(`${API_BASE}/api/add-customer-or-credit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_name: newCustomerObj.name,
+        phone_synthetic: newCustomerObj.phone,
+        old_balance: oldBal,
+        added_amount: todayAdd,
+        items: 'Manual Counter Credit',
+        tx_type: 'Udhari',
+        time_str: 'Just Now'
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.customers) setCustomers(data.customers);
+      if (data.streamLogs) setStreamLogs(data.streamLogs);
+    })
+    .catch(() => {});
   };
 
   // Resolve single dispute item
@@ -1144,11 +1339,22 @@ export default function App() {
           'success'
         );
 
-        fetch(`${API_BASE}/api/resolve-dispute`, {
+        const activeCust = customers.find(c => c.id === selectedCustomerId);
+        fetch(`${API_BASE}/api/resolve-dispute-claim`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ disputeId, customerId: selectedCustomerId })
-        }).catch(() => {});
+          body: JSON.stringify({
+            dispute_id: disputeId,
+            disputeId: disputeId,
+            customer_name: activeCust ? activeCust.name : '',
+            customerId: selectedCustomerId
+          })
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.customers) setCustomers(data.customers);
+        })
+        .catch(() => {});
 
         setConfirmationModal({ isOpen: false, title: '', message: '', onConfirm: null });
       }
@@ -1460,6 +1666,20 @@ export default function App() {
               <span className="hidden sm:inline">Print</span>
             </button>
 
+            {/* 1-Click Reset Demo DB Button */}
+            <button
+              onClick={handleResetDemoDb}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer ${
+                isDarkMode 
+                  ? 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 text-rose-300' 
+                  : 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-700'
+              }`}
+              title="Reset SQLite dukandar_khata.db back to initial default demo numbers"
+            >
+              <RotateCw size={12} strokeWidth={1.75} className="text-rose-400" />
+              <span className="hidden xl:inline">Reset Demo</span>
+            </button>
+
             {/* Dark Mode Toggle Switch */}
             <button
               onClick={toggleDarkMode}
@@ -1601,6 +1821,15 @@ export default function App() {
                   {isDarkMode ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-indigo-600" />}
                   <span>{isDarkMode ? "Light Mode" : "Dark Mode"}</span>
                 </button>
+                <button 
+                  onClick={() => { handleResetDemoDb(); setIsMobileMenuOpen(false); }}
+                  className={`flex items-center gap-2 p-2.5 rounded-lg border text-left col-span-2 ${
+                    isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-700'
+                  }`}
+                >
+                  <RotateCw size={14} className="text-rose-400" />
+                  <span>Reset Demo Database (dukandar_khata.db)</span>
+                </button>
               </div>
             </motion.div>
           )}
@@ -1637,7 +1866,29 @@ export default function App() {
                   <option value="day_stall_recording_oct31.wav">day_stall_recording_oct31.wav (11.5 hrs)</option>
                   <option value="evening_rush_hinglish_kanglish.wav">evening_rush_hinglish_kanglish.wav (4.2 hrs)</option>
                   <option value="dispute_verification_clip.wav">dispute_verification_clip.wav (45 mins)</option>
+                  {!['day_stall_recording_oct31.wav', 'evening_rush_hinglish_kanglish.wav', 'dispute_verification_clip.wav'].includes(selectedAudioSource) && (
+                    <option value={selectedAudioSource}>{selectedAudioSource}</option>
+                  )}
                 </select>
+
+                {/* Hidden File Input for Real Audio Upload (.wav, .mp3, .m4a, .ogg) */}
+                <input
+                  type="file"
+                  ref={audioFileInputRef}
+                  accept="audio/*,.wav,.mp3,.m4a,.ogg"
+                  onChange={handleAudioFileUpload}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => audioFileInputRef.current?.click()}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 transition-all cursor-pointer shadow-sm"
+                  title="Upload .wav, .mp3, .m4a, .ogg to analyze with Gnani AI"
+                >
+                  <Upload size={12} strokeWidth={2} />
+                  <span>Upload Audio</span>
+                </button>
               </div>
             </div>
 
